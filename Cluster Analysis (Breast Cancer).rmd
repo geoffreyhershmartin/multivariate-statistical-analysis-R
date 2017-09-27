@@ -1,0 +1,103 @@
+---
+title: "Cluster Analysis on Breast Cancer Dataset"
+output: pdf_document
+---
+
+In this project, I run different clustering methods, namely Ward's method and the single linkage method, on the wisconsin breast cancer dataset with Manhattan and Euclidean distance measures. Then I also run KMeans clustering on the data and cross-check the results with our hierarchical clustering methods. Ultimately, the goal is to see if there
+are certain groups of observations that are similar. 
+
+```{r, warning=FALSE}
+cancer_raw <- read.csv("Data/breast-cancer-wisconsin.csv",as.is=TRUE)
+
+# Clean the data
+# Note: the column "bare_nucleoli" has missing values
+# We choose to omit rows that have missing (16 rows)
+cancer <- as.data.frame(apply(cancer_raw,2,as.numeric))
+cancer <- na.omit(cancer)
+```
+
+Here, I use the Euclidean distance and Manhattan distance metrics. This is because all our predictor variables are continuous, and these metrics are suitable for continuous variables. Furthermore, since the Minkowski distance is just a generalisation of the Euclidian and Manhattan distances, using these metrics instead will increase the interpretability of our cluster analysis.
+
+I will also be standardising our data. Although the variables in our original data are already on the same scale, i.e., 1 to 10, standardising our data will increase the interpretability of our results since we are standardising the mean across the predictors.
+
+The dataset has over 600 observations, which makes it difficult to produce a readable dendrogram. Hence, we will sample 100 observations from our dataset to use for our analysis in this part.
+
+```{r}
+# Standardize Data
+scancer <- scale(cancer[,-c(1,11)])
+
+# Sample 100 observations out of the total number of observations
+# (This will make the dendrogram more readable)
+set.seed(420)
+index <- sample(1:nrow(scancer),100)
+scancer <- scancer[index,]
+
+# Calculate Distance Matrix
+dist1 <- dist(scancer,method="euclidean") # Euclidean
+dist2 <- dist(scancer,method="manhattan") # Manhattan
+
+# Perform clustering using Ward's method
+clust1_1 <- hclust(dist1,method="ward.D") # Euclidean distance, Ward's method
+clust1_2 <- hclust(dist2,method="ward.D") # Manhattan distance, Ward's method
+
+# Perform clustering using Single Linkage method
+clust2_1 <- hclust(dist1,method="single") # Euclidean distance, Single Linkage method
+clust2_2 <- hclust(dist2,method="single") # Manhattan distance, Single Linkage method
+```
+Here are the dendrograms for each approach:
+
+```{r, echo=FALSE}
+plot(clust1_1,labels= cancer[index,1], cex=0.3, xlab="",ylab="Euclidean Distance",main="Clustering using Euclidean distance & Ward's method")
+
+plot(clust1_2,labels= cancer[index,1], cex=0.3, xlab="",ylab="Manhattan Distance",main="Clustering using Manhattan distance & Ward's method")
+
+plot(clust2_1,labels= cancer[index,1], cex=0.3, xlab="",ylab="Euclidean Distance",main="Clustering using Euclidean distance & Single Linkage")
+
+plot(clust2_2,labels= cancer[index,1], cex=0.3, xlab="",ylab="Manhattan Distance",main="Clustering using Manhattan distance & Single Linkage")
+```
+
+In general, there are 2 groups present when the clustering has been performed. However, when Ward's method was used, there are 2 more distinct groups, i.e., 4 distinct groups. The single linkage method could only yield 2 distinct groups since many groups branched out to other groups, as seen in the following plots:
+
+Here, I use the modified R script by Matt Peeples to perform the k-means clustering algorithm for $1 \leq k \leq 15$. 
+
+```{r, echo=FALSE}
+kdata=scancer
+n.lev=15  #set max value for k
+
+# Calculate the within groups sum of squared error (SSE) for the number of cluster solutions selected by the user
+wss <- rnorm(10)
+while (prod(wss==sort(wss,decreasing=T))==0) {
+  wss <- (nrow(kdata)-1)*sum(apply(kdata,2,var))
+  for (i in 2:n.lev) wss[i] <- sum(kmeans(kdata, centers=i)$withinss)}
+
+# Calculate the within groups SSE for 250 randomized data sets (based on the original input data)
+k.rand <- function(x){
+  km.rand <- matrix(sample(x),dim(x)[1],dim(x)[2])
+  rand.wss <- as.matrix(dim(x)[1]-1)*sum(apply(km.rand,2,var))
+  for (i in 2:n.lev) rand.wss[i] <- sum(kmeans(km.rand, centers=i)$withinss)
+  rand.wss <- as.matrix(rand.wss)
+  return(rand.wss)
+}
+
+rand.mat <- matrix(0,n.lev,250)
+
+k.1 <- function(x) { 
+  for (i in 1:250) {
+    r.mat <- as.matrix(suppressWarnings(k.rand(kdata)))
+    rand.mat[,i] <- r.mat}
+  return(rand.mat)
+}
+
+rand.mat <- k.1(kdata)
+
+xrange <- range(1:n.lev)
+yrange <- range(rand.mat,wss)
+plot(xrange,yrange, type='n', xlab="Cluster Solution", ylab="Within Groups SSE", main="Cluster Solutions against SSE")
+for (i in 1:250) lines(rand.mat[,i],type='l',col='red')
+lines(1:n.lev, wss, type="b", col='blue')
+legend('topright',c('Actual Data', '250 Random Runs'), col=c('blue', 'red'), lty=1)
+```
+
+From the results and scree-plot, we see that there are likely to be 3 groups that exist since 3 is at the point where the 'elbow' is. After 3 clusters, the within groups SSE does not seem to improve significantly, i.e., decrease, much as we increase the number of clusters.
+
+Given that the dataset actually classifies the orbservations into the 2 categories of malignant and benign tumours, observing between 2 to 4 clusters in the data seems fairly consistent with the response variable of the original data (which has two categories). Further analysis could be done to examine whether the clustering of the dataset coincides with the classification provided in the dataset.

@@ -1,0 +1,142 @@
+---
+title: "MANOVA and ANOVA Analysis on Crime in Ohio"
+output: pdf_document
+---
+
+In this project, I apply MANOVA and ANOVA tests to data on perception of crime in Ohio. Ultimately, we want to answer the question of whether females and males answer questions differently and whether people of different races (white/black/other) answer questions on crime differently.
+
+```{r}
+# read in the data
+crime <- read.csv("Data/ohiocrime.csv")  
+head(crime)
+crime <- na.omit(crime)
+
+crime$V70[crime$V70 == 0] <- "Female"
+crime$V70[crime$V70 == 1] <- "Male"
+crime$V70 <- as.factor(crime$V70)
+
+crime$V71[crime$V71 == 1] <- "White"
+crime$V71[crime$V71 == 2] <- "Black"
+crime$V71[crime$V71 == 3] <- "Other"
+crime$V71 <- as.factor(crime$V71)
+```
+
+```{r, eval = FALSE}
+# generate interaction plots
+
+interaction.plot(crime$V72, crime$V70, crime$V10,
+ lwd=3,col=c("red","blue"),xlab="Level of education",
+ ylab = "Mean of level of agreement", trace.label = "Gender",
+ main="Interaction Plot for V10 -
+ \"Government should provide jobs during summer\"")
+
+interaction.plot(crime$V72, crime$V70, crime$V12,
+ lwd=3,col=c("red","blue"),xlab="Level of education",
+ ylab = "Mean of level of agreement", trace.label = "Gender",
+ main="Interaction Plot for V12 -
+ \"Develop night recreational activites\"")
+
+interaction.plot(crime$V72, crime$V70, crime$V16,
+ lwd=3,col=c("red","blue"),xlab="Level of education",
+ ylab = "Mean of level of agreement", trace.label = "Gender",
+ main="Interaction Plot for V16 -
+ \"Use treatment programs instead of arrests\"")
+
+interaction.plot(crime$V72, crime$V70, crime$V23,
+ lwd=3,col=c("red","blue"),xlab="Level of education",
+ ylab = "Mean of level of agreement", trace.label = "Gender",
+ main="Interaction Plot for V23 -
+ \"Provide help to at-risk children\"")
+```
+
+In general across all 4 responses, we see that females respond with higher levels of agreement to the questions than males. Thus, I argue that there does seem to be a difference in mean agreement levels between men and women and that women have a higher mean. Additionally, there seems to be a multimodal distribution across the different responses and education levels, with responders having very low (i.e.,  below 2), medium (i.e., between around 4) and very high (i.e., above 7) having similar responses.
+
+```{r, echo = FALSE, fig.height = 4.2}
+# generate interaction plots
+
+interaction.plot(crime$V72, crime$V70, crime$V10,
+ lwd=3,col=c("red","blue"),xlab="Level of education",
+ ylab = "Mean of level of agreement", trace.label = "Gender",
+ main="Interaction Plot for V10 -
+ \"Government should provide jobs during summer\"")
+
+interaction.plot(crime$V72, crime$V70, crime$V12,
+ lwd=3,col=c("red","blue"),xlab="Level of education",
+ ylab = "Mean of level of agreement", trace.label = "Gender",
+ main="Interaction Plot for V12 -
+ \"Develop night recreational activites\"")
+
+interaction.plot(crime$V72, crime$V70, crime$V16,
+ lwd=3,col=c("red","blue"),xlab="Level of education",
+ ylab = "Mean of level of agreement", trace.label = "Gender",
+ main="Interaction Plot for V16 -
+ \"Use treatment programs instead of arrests\"")
+
+interaction.plot(crime$V72, crime$V70, crime$V23,
+ lwd=3,col=c("red","blue"),xlab="Level of education",
+ ylab = "Mean of level of agreement", trace.label = "Gender",
+ main="Interaction Plot for V23 -
+ \"Provide help to at-risk children\"")
+```
+
+
+```{r}
+# fit linear model
+model <- manova(as.matrix(crime[,1:4])~ crime$V70 + crime$V72 + crime$V70*crime$V72)
+
+# get univariate results
+summary.aov(model)
+
+# get multivariate results
+summary.manova(model)
+summary.manova(model,test="Wilks")
+```
+
+
+$\textbf{Univariate Results:}$ Here, I make the following observations for each response variable:
+
+$\textbf{V10 (Summer jobs provided by state government)}$
+For V10, there are differences between levels of education (V72), but no overall observed differences due to gender (V70). There is no evidence of an interaction effect.
+
+$\textbf{V12 (Recreation programs)}$
+For V12, there are differences between genders (V70), but no overall observed differences due to level of education. There is no evidence of an interaction effect.
+
+$\textbf{V16 (Treatment programs instead of arrest)}$
+For V16, there are differences due to both levels of education (V72) and gender (V70). There is no evidence of an interaction effect.
+
+$\textbf{V23 (Help for families for at-risk children)}$
+The results for V23 are similar to V12 (only level of education has differences).
+
+$\textbf{Multivariate Results:}$
+Overall, there are differences between genders (V70) and between education levels (V72). The multivariate statistics for both Pillai's Trace and for Wilks' Lambda were significant. However, in both tests there is no evidence for an interaction effect between gender and education level.
+
+```{r}
+contrasts(crime$V71, 1) <- matrix(c(0, 1, 1), 3, 1)
+contrasts(crime$V71)
+model_null <- lm(cbind(V10, V12, V16, V23) ~ 1, crime)
+model <- lm(cbind(V10, V12, V16, V23) ~ V71, crime)
+model_null
+model
+
+anova(model_null, model)
+```
+
+Here, we set contrasts using the contrasts() function, such that only one contrast is used to examine differences between the race groups. We wish to examine the difference in mean (multivariate) responses to the questions, between Black and non-Black (White and Other) groups. Hence I set the contrast to include the White and Other groups, so that the Black mean (multivariate) responses are accounted for in the overall model intercept.
+
+There is a significant difference between the mean (multivariate) responses of these two groups if, and only if, the model that accounts for the difference in means (using the contrasts) causes a statistically significant reduction in the residual sum of squares (as indicated by the test statistics) from the intercept-only null model, which does not account for such differences.
+
+Hence, we can test the null hypothesis that the mean (multivariate) responses of the two groups are equal by using the anova() function to perform a comparison of the two models. In this case, we find that the mean (multivariate) responses between the Black and non-Black groups are significant at $\alpha = 0.05$.
+
+This method of applying multivariate contrasts in R appears to be easily generalisable, if it is correct.
+
+```{r}
+crime$V72 <- as.factor(crime$V72)
+linear_model <- lm(as.matrix(crime[,1:4])~ crime$V70 + crime$V72 + crime$V70*crime$V72 + crime$V87)
+
+plot(jitter(crime$V87), jitter(crime[, 1]), xlab = "Income Level", ylab = "V10")
+plot(jitter(crime$V87), jitter(crime[, 2]), xlab = "Income Level", ylab = "V12")
+plot(jitter(crime$V87), jitter(crime[, 3]), xlab = "Income Level", ylab = "V16")
+plot(jitter(crime$V87), jitter(crime[, 4]), xlab = "Income Level", ylab = "V23")
+```
+
+In general, there are no linear relationships between income level and the response variables. For there seems to be no discernible pattern with respect to the density of the points plotted. However, income level and response V16 ("Use treatment programs instead of arrests") seem to be negatively correlated to a small extent.
